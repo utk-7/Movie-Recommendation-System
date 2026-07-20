@@ -1,0 +1,6 @@
+# Minimal dependencies for the Movie Recommendation System.
+# All packages are pure-Python / wheel-based; no external services or API keys.
+pandas>=2.2.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+streamlit>=1.35.0
