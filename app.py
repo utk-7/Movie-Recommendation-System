@@ -1,12 +1,3 @@
-"""
-app.py
-------
-Streamlit frontend for the movie recommender.
-
-Everything is local: titles come from movies.pkl and recommendations come from
-recommender.get_recommendations(). No external API calls are made.
-"""
-
 import streamlit as st
 
 from recommender import get_recommendations
@@ -40,17 +31,11 @@ def extract_year(release_date) -> str:
     return "—"
 
 
-# ---------------------------------------------------------------------------
-# Page setup
-# ---------------------------------------------------------------------------
 st.set_page_config(page_title="Movie Recommender", layout="wide")
 
-st.title("🎬 Movie Recommender")
+st.title("Movie Recommender")
 st.caption("Content-based suggestions blended with an IMDB-style weighted rating — fully offline, no external data fetched.")
 
-# ---------------------------------------------------------------------------
-# Sidebar: how it works
-# ---------------------------------------------------------------------------
 with st.sidebar:
     st.header("How this works")
     st.write(
@@ -71,18 +56,12 @@ with st.sidebar:
     )
     st.info("All data is loaded from local pickle files. No network calls are made.")
 
-# ---------------------------------------------------------------------------
-# Session state
-# ---------------------------------------------------------------------------
 if "results" not in st.session_state:
     st.session_state.results = None
 if "movie_select" not in st.session_state:
     st.session_state.movie_select = load_titles()[0]
 
 
-# ---------------------------------------------------------------------------
-# Main controls
-# ---------------------------------------------------------------------------
 titles = load_titles()
 
 selected = st.selectbox(
@@ -97,9 +76,6 @@ selected = st.selectbox(
 if st.button("Recommend", type="primary"):
     st.session_state.results = get_recommendations(selected)
 
-# ---------------------------------------------------------------------------
-# Render results
-# ---------------------------------------------------------------------------
 results = st.session_state.results
 
 if results is None:

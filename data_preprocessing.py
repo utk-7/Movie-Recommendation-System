@@ -1,29 +1,8 @@
-"""
-data_preprocessing.py
----------------------
-Prepares the TMDB 5000 Movie Dataset for a hybrid recommendation system.
-
-Pipeline:
-  1. Load the two raw CSVs (movies + credits).
-  2. Merge them on the movie id (and cross-check the title).
-  3. Parse the JSON-like string columns with `ast.literal_eval`.
-  4. Extract the top-3 cast members and the director.
-  5. Build a cleaned, lowercased "tags" column (overview + genres +
-     keywords + cast + director).
-  6. Keep a tidy, analyst-friendly subset of columns.
-  7. Handle missing values and persist the result as a pickle.
-
-Everything runs offline from the CSV files in the project root.
-"""
-
 import ast
 import re
 
 import pandas as pd
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
 MOVIES_CSV = "tmdb_5000_movies.csv"
 CREDITS_CSV = "tmdb_5000_credits.csv"
 OUTPUT_PKL = "movies_cleaned.pkl"
@@ -43,21 +22,11 @@ FINAL_COLUMNS = [
     "tags",          # cleaned searchable text
 ]
 
-
-# ---------------------------------------------------------------------------
-# 1. Loading & merging
-# ---------------------------------------------------------------------------
 def load_and_merge(movies_path: str, credits_path: str) -> pd.DataFrame:
-    """Load both CSVs and merge them on the movie id.
 
-    The movies table keys on `id`; the credits table keys on `movie_id`.
-    We merge on those keys and keep the movies `title` as the canonical one.
-    """
     movies = pd.read_csv(movies_path)
     credits = pd.read_csv(credits_path)
 
-    # Both tables carry a `title`; drop the credits copy so the merge keeps a
-    # single canonical `title` column (avoids title_x / title_y suffixes).
     credits = credits.drop(columns=["title"])
 
     # Merge credits onto movies via the shared movie identifier.
@@ -70,14 +39,7 @@ def load_and_merge(movies_path: str, credits_path: str) -> pd.DataFrame:
     return df
 
 
-# ---------------------------------------------------------------------------
-# 2. JSON parsing helpers
-# ---------------------------------------------------------------------------
 def parse_json_column(series: pd.Series) -> pd.Series:
-    """Safely parse a column of JSON-like strings into Python objects.
-
-    Returns an empty list for any value that cannot be parsed (NaN, malformed).
-    """
     def _parse(value):
         if isinstance(value, str):
             try:
@@ -90,11 +52,6 @@ def parse_json_column(series: pd.Series) -> pd.Series:
 
 
 def extract_names(json_list, key: str = "name", top_n: int | None = None) -> list[str]:
-    """Pull a list of `name` strings out of a parsed JSON list of dicts.
-
-    `top_n` limits how many entries to keep (ordered as provided, e.g. by
-    billing order for cast).
-    """
     if not isinstance(json_list, list):
         return []
     names = [item.get(key, "") for item in json_list if isinstance(item, dict)]
@@ -112,17 +69,7 @@ def extract_director(crew_list) -> str:
             return member.get("name", "")
     return ""
 
-
-# ---------------------------------------------------------------------------
-# 3. Text cleaning helpers
-# ---------------------------------------------------------------------------
 def clean_token(text: str) -> str:
-    """Clean a single token (name/keyword/genre) for use inside `tags`.
-
-    Lowercases and strips ALL non-alphanumeric characters including internal
-    spaces, so "Sam Worthington" -> "samworthington" and "culture clash"
-    -> "cultureclash".
-    """
     if not isinstance(text, str):
         return ""
     text = text.lower()
@@ -131,10 +78,7 @@ def clean_token(text: str) -> str:
 
 
 def clean_overview(text: str) -> str:
-    """Clean the free-text overview: lowercase, drop punctuation, collapse
-    whitespace. Words are preserved (unlike `clean_token`) so the text stays
-    readable/searchable.
-    """
+
     if not isinstance(text, str):
         return ""
     text = text.lower()
@@ -143,21 +87,12 @@ def clean_overview(text: str) -> str:
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
-
-# ---------------------------------------------------------------------------
-# 4. Feature construction
-# ---------------------------------------------------------------------------
 def build_genres_readable(genres_list) -> str:
-    """Render genres as a readable, comma-separated string, e.g.
-    'Action, Adventure, Fantasy'."""
     names = extract_names(genres_list)
     return ", ".join(names)
 
 
 def build_tags(row) -> str:
-    """Combine overview + genres + keywords + cast + director into one
-    cleaned, lowercased string of tokens suitable for similarity search.
-    """
     overview = clean_overview(row["overview"])
     genres = " ".join(clean_token(g) for g in extract_names(row["genres"]))
     keywords = " ".join(clean_token(k) for k in extract_names(row["keywords"]))
@@ -168,32 +103,28 @@ def build_tags(row) -> str:
     tags = " ".join([overview, genres, keywords, cast, director])
     return re.sub(r"\s+", " ", tags).strip()
 
-
-# ---------------------------------------------------------------------------
-# 5. Main preprocessing routine
-# ---------------------------------------------------------------------------
 def preprocess() -> pd.DataFrame:
-    # --- Load & merge -------------------------------------------------------
+    # Load & merge 
     df = load_and_merge(MOVIES_CSV, CREDITS_CSV)
 
-    # --- Parse JSON-like columns -------------------------------------------
+    # Parse JSON-like columns 
     for col in ["genres", "keywords", "cast", "crew"]:
         df[col] = parse_json_column(df[col])
 
-    # --- Extract structured fields -----------------------------------------
+    #  Extract structured fields 
     df["cast_names"] = df["cast"].apply(lambda x: extract_names(x, top_n=TOP_CAST_COUNT))
     df["director"] = df["crew"].apply(extract_director)
 
-    # --- Build tags ---------------------------------------------------------
+    #  Build tags 
     df["tags"] = df.apply(build_tags, axis=1)
 
-    # --- Build the readable genres string ----------------------------------
+    #  Build the readable genres string 
     df["genres"] = df["genres"].apply(build_genres_readable)
 
-    # --- Clean the overview text -------------------------------------------
+    #  Clean the overview text 
     df["overview"] = df["overview"].apply(clean_overview)
 
-    # --- Handle missing values ---------------------------------------------
+    # Handle missing values 
     # Drop rows that have no usable text content.
     df = df[df["overview"].str.len() > 0]
     df = df[df["tags"].str.len() > 0]
@@ -208,18 +139,12 @@ def preprocess() -> pd.DataFrame:
     df["genres"] = df["genres"].fillna("")
     df["tags"] = df["tags"].fillna("")
 
-    # --- Keep only the requested columns -----------------------------------
     df = df[FINAL_COLUMNS].reset_index(drop=True)
 
-    # --- Persist ------------------------------------------------------------
     df.to_pickle(OUTPUT_PKL)
     print(f"\nSaved cleaned data to '{OUTPUT_PKL}'")
     return df
 
-
-# ---------------------------------------------------------------------------
-# 6. Entry point
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     movies_clean = preprocess()
 
